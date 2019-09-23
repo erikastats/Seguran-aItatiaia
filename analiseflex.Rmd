@@ -1,0 +1,602 @@
+---
+title: "Percepção de Segurança Itatiaia"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(tidyr)
+library(magrittr)
+library(plotly)
+library(readxl)
+library(viridis)
+library(treemap)
+library(reshape)
+
+Moradores = read_excel("~/Erika/Amostragem2/Pesquisa Amostragem 2_ Completo.xlsx")
+```
+
+Residentes 
+=====================================  
+
+
+Row {data-width=650}
+-----------------------------------------------------------------------
+
+### Quantidade de residentes nas casas entrevistadas
+
+```{r}
+Qmora = nrow(Moradores)
+valueBox(Qmora, icon = "fa-users")
+```
+
+### Média de moradores por casa
+
+```{r}
+QuantidadeEmcada = Moradores %>% count(`Controle Tabulação`)
+MediaEmcada = QuantidadeEmcada$n %>% mean() %>% round()
+valueBox(MediaEmcada, icon = "fa-user")
+```
+
+### Pessoas Entrevistadas
+
+```{r}
+PessoasEntr = Moradores$`Controle Tabulação` %>% unique() %>% length()
+valueBox(PessoasEntr, icon = "fa-user-check")
+```
+
+
+Row {data-height=350 }
+-----------------------------------------------------------------------
+
+### Idade 
+
+```{r}
+densIdade = density(Moradores$Idade, na.rm = T)
+plot_ly(  x = ~densIdade$x, y = ~densIdade$y, type = 'scatter', mode = 'lines', fill = 'tozeroy') %>% 
+  layout(
+         xaxis = list(title = 'Idade'),
+         yaxis = list(title = 'Densidade'))
+```
+
+### Sexo 
+
+```{r}
+SexoMoradores = Moradores %>% 
+  group_by(Sexo) %>% 
+  summarize(count = n()) 
+
+SexoMoradores%>% 
+  plot_ly(labels = ~Sexo, values = ~count,
+          text = ~paste0(SexoMoradores$Sexo, "<br>", SexoMoradores$count),
+          textposition = 'auto',
+          marker = list(colors = viridis(length(SexoMoradores)))) %>% 
+  add_pie(hole = 0.6) %>% 
+    layout( showlegend = F,
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+```
+
+
+
+Row {data-width=650}
+-----------------------------------------------------------------------
+
+### Média de duração da aplicação do questionário (minutos)
+
+
+```{r}
+Identificacao = read_excel("~/Erika/Amostragem2/Pesquisa Amostragem 2_ Completo.xlsx", 
+    sheet = "Identificação")
+Quantidade = read_excel("~/Erika/Amostragem2/QuantidadeLotesQuadras.xlsx")
+Quantidade$Quadra = paste0("Quadra ", Quantidade$Quadra)
+Quantidade %<>% mutate(pi = QuantidadeLote/sum(QuantidadeLote),
+                       ProbDomicilio = 1/QuantidadeLote)
+
+Moradores %<>% mutate(Maiores = ifelse(Idade >= 18, 1, 0))
+Quantmaiores = Moradores %>% filter(Maiores == 1) %>% group_by(`Controle Tabulação`) %>% count(Maiores) %>% mutate(Propmaior = round(1/n,2))
+
+DadosMoradores = merge(Quantidade, Identificacao, by.x = "Quadra", by.y = "Q.3")
+DadosMoradores = merge(Quantmaiores[,c(1,4)], DadosMoradores, by.x = "Controle Tabulação", by.y = "Controle Tabulação")
+
+```
+
+
+```{r}
+MediaDuracao = difftime(Identificacao$Q.10, Identificacao$Q.9, units = "mins") %>% mean() %>% round(digits = 2)
+valueBox(MediaDuracao, icon = "fa-clock")
+```
+
+### Data da Aplicação inicial
+
+```{r}
+
+valueBox(min(Identificacao$Q.8), icon = "fa-calendar")
+```
+
+### Data da Aplicação Final
+
+```{r}
+valueBox(max(Identificacao$Q.8), icon = "fa-calendar-check")
+```
+
+
+Variáveis Demográficas {data-orientation=columns}
+=====================================  
+
+Row 
+-----------------------------------------------------------------------
+
+```{r, warning=FALSE}
+Respostas = read_excel("~/Erika/Amostragem2/Pesquisa Amostragem 2_ Completo.xlsx", 
+    sheet = "Pesquisa")
+
+Respostas = merge(Respostas, DadosMoradores[,c(1,2,5,6)], by = "Controle Tabulação")
+```
+
+###
+
+```{r}
+
+  cont = Respostas %>% count(Respostas$A.1)
+  names(cont) = c("Grupo", "n")
+  cont %<>% 
+    arrange(n) %>% 
+    mutate( prop = (n/sum(n))*100,
+            cores = rev(viridis(nrow(cont), alpha = 0.9)),
+            legenda = factor(Grupo, 
+                             labels = c("Solteiro(a)", "Casado(a)", "Amigado(a)",
+                                        "Divorciado(a)", "Separado(a)", "Viúvo(a)")))
+    
+
+  plot_ly(cont, y = ~prop, x = ~legenda, 
+           type = "bar",
+          textposition = 'auto',
+          text = paste0( round(cont$prop, 2),"%<br>","n: ", cont$n),
+          marker = list(color = ~cores,
+                        line = list(color = 'rgb(248, 248, 249)', width = 1))) %>% 
+    layout(title = "Estado Civil",
+           xaxis = list(title = ""),
+           yaxis = list(title = ""),
+           barmode = 'stack')
+
+```
+
+###
+
+
+```{r}
+
+Respostas$A.2[is.na(Respostas$A.2)]  = 99
+cont = Respostas %>% count(Respostas$A.2)
+  names(cont) = c("Grupo", "n")
+  cont %<>% 
+    arrange(n) %>% 
+    mutate( cores = rev(viridis(nrow(cont), alpha = 0.9)),
+            legenda = factor(Grupo, 
+                             labels = c("Branco(a)", "Preto(a)", "Pardo(a)",
+                                        "Amarelo(a)", "Indígena(a)", "Outra(a)", "NS", "NR")))
+    
+cont %>% 
+  plot_ly(labels = ~legenda, values = ~n, marker = list(colors = ~cores), textposition = 'inside') %>%
+  add_pie(hole = 0.6) %>%
+  layout(title = "Declaração de cor/raça",
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE)) %>% 
+   add_annotations(xref = 'paper', yref = 'paper',
+                  x = -0.05, y = -0.05,
+                  text = paste('3 pessoas responderam Moreno(a)'),
+                  font = list(family = 'Arial', size = 10, color = 'rgb(150,150,150)'),
+                  showarrow = FALSE)
+
+```
+
+
+Row 
+-----------------------------------------------------------------------
+
+
+### Nascidos em Goiânia
+
+```{r}
+A3 = Respostas %>% group_by(A.3) %>% count()
+valueBox(A3$n[1], icon = "fa-map-marker")
+```
+
+### Nascidos fora de Goiânia
+
+```{r}
+valueBox(A3$n[2], icon = "fa-bus")
+```
+
+###
+
+```{r}
+A3.a = Respostas %>% group_by(`A.3_(2.a)`) %>% count() %>% na.omit()
+A3.a$`A.3_(2.a)` = toupper(A3.a$`A.3_(2.a)`)
+names(A3.a)[1] = "A.3.a"
+
+
+```
+
+```{r}
+
+treemap(A3.a, index = c("A.3.a", "n"), vColor = "n", vSize = "n",type = "value", palette = rev(viridis(6)), title = "Estado em que nasceu")
+
+
+```
+
+
+Column
+-----------------------------------------------------------------------
+
+###
+
+```{r, warning=FALSE}
+Respostas %>% plot_ly(x = ~`A.3_(2.b)`, type = "histogram", marker = list(color = "#440154FF", opacity = 0.8)) %>% 
+    layout(title = "Anos que mora em Goiânia",
+           xaxis = list(title = ""),
+           yaxis = list(title = ""))
+```
+
+
+###
+
+```{r}
+
+cont = Respostas %>% count(A.4)
+  names(cont) = c("Grupo", "n")
+  cont %<>% 
+    arrange(n) %>% 
+    mutate( cores = rev(viridis(nrow(cont), alpha = 0.9)),
+            legenda = factor(Grupo, 
+                             labels = c("Analfabeto", "1ª a 4ª série", "1º grau Inco.",
+                                        "1º grau Com.", "2º grau Inco.", "2º grau Com.", 
+                                        "Superior Inco.", "Superior Com.", "Pós-Graduação")))
+    
+cont %>% 
+  plot_ly(labels = ~legenda, values = ~n, marker = list(colors = ~cores),
+          textposition = 'inside',
+        textinfo = 'percent') %>%
+  add_pie(hole = 0.6) %>%
+  layout(title = "Escolaridade",
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+
+
+```
+
+Vitimização Vicária {data-navmenu="Perguntas"} 
+=====================================  
+
+Row {.tabset}
+---------------------------------
+
+### B.1) 
+
+```{r}
+barrasPerguntas = function(coluna, titulo){
+
+fReq = Respostas[,coluna] %>% table() %>% as.data.frame()
+names(fReq)[1] = "Grupo"
+fReq %<>% mutate(Prop = round((Freq/sum(Freq))*100,2))
+fReq  %>% plot_ly(x = ~Freq, y = ~Grupo, type = "bar", 
+                  text = ~Prop,textposition = 'auto', 
+                  orientation = 'h', marker = list(color = "#440154FF",
+                                                   opacity = 0.8)) %>% 
+  layout(title = titulo,
+         xaxis = list(title = ""),
+         yaxis = list(title = ""))}
+```
+
+
+
+```{r}
+Respostas[is.na(Respostas$B.1),"B.1"] = 99
+Respostas$B.1 %<>% factor(labels = c("Sim", "Não", "NS", "NR"))
+
+barrasPerguntas("B.1", "Você conhece alguém que mora no Itatiaia e teve sua residência invadida no úlitmo ano (2018)?")
+
+```
+
+### B.2)
+
+```{r}
+Respostas$B.2 %<>% factor(labels = c("Sim", "Não", "NS", "NR"))
+
+barrasPerguntas("B.2", " Você conhece alguém que foi roubado ou assaltado no Itatiaia no último ano (2018)?")
+```
+
+### B.3) 
+
+```{r}
+Respostas$B.3 %<>% factor(labels = c("Sim", "Não"))
+
+barrasPerguntas("B.3", "Você conhece alguém que foi vítima de roubo ou arrombamento de veículos no Itatiaia no último ano (2018)")
+```
+
+### B.4) 
+
+```{r}
+Respostas[which(Respostas$B.4 == 4), "B.4"] = 99
+Respostas$B.4 %<>% factor(labels = c("Sim", "Não",  "NR"))
+
+barrasPerguntas("B.4", "Você tem conhecimento da ocorrência de roubos ou assaltos em farmácias, padarias, casas lotéricas e outros comércios nas proximidades da sua casa no úlitmo Ano (2018)?")
+```
+
+### B.5) 
+
+```{r}
+Respostas$B_5 %<>% factor(labels = c("Sim, assassinato", "Sim, tentativa de assassinato",  "Sim, assassinato e tentativa de assassinato", "Não"))
+
+barrasPerguntas("B_5", "Você tem conhecimento de assassinato ou tentativa de assassinato nas proximidades da sua casa?")
+```
+
+###  B.6) 
+
+```{r}
+Questoesmultiplas = function(dado, lab ){
+  vtQmultiplas = apply(dado,2, function(a){
+    tab = a %>% factor(labels = c("Sim", "Não")) %>% table() 
+    tabpo = prop.table(tab)
+    d = data.frame(tab,tabpo)
+    d %>% arrange(Freq) %>% mutate(cores = rev(viridis(nrow(d))))
+  }) 
+  
+  # Juntando os resultados em uma tabela
+  vtQmultiplas = plyr::ldply(vtQmultiplas)
+  vtQmultiplas = vtQmultiplas[,-4]
+  names(vtQmultiplas) = c("id", "op", "Freq", "PropFreq", "cores")
+  vtQmultiplas %<>% mutate(legenda = factor(id, labels = lab)) 
+  vtQmultiplas}
+  
+plotQuestoesmultiplas = function(dado, titulo){
+
+  dado %>% plot_ly( x = ~Freq, y = ~legenda, type = "bar", 
+          orientation = "h",  
+          text = paste0(round(dado$PropFreq*100,2), "%<br>", dado$op),
+          marker = list(color = ~cores, opacity = 0.8,
+                        line = list(color = 'rgb(248, 248, 249)', width = 1))) %>% 
+    layout(title = titulo,
+           xaxis = list(title = "",
+                        showgrid = FALSE,
+                        showline = FALSE,
+                        zeroline = FALSE),
+           yaxis = list(title = "",
+                        showgrid = FALSE,
+                        showline = FALSE,
+                        zeroline = FALSE),
+           barmode = 'stack')}
+```
+
+```{r}
+dB6 = Questoesmultiplas(dado = Respostas[,18:23], lab = c("Furto", "Roubo", "Agressão Física", 
+                                                           "Residência Invadida", "Tentativa de Homicídio",
+                                                           "Agressão Sexual"))
+plotQuestoesmultiplas(dB6,"Você já foi vítima de algum desses crimes no último ano no Itatiaia")
+```
+
+### B.6.1
+
+```{r}
+Respostas$B.6.1 %<>% factor(labels = c("Sim", 
+                                       "Não"))
+
+barrasPerguntas("B.6.1",titulo =  "Se foi vítima de, pelo menos, um dos crimes citados anteriormente<br>  foi feito o resgistro do último crime sofrido na delegacia?")
+```
+
+### B.6.2
+
+```{r}
+Respostas$B.6.2 %<>% factor(labels = c("Não era importante", "Não acreditava na polícia",
+                                       "Não queria envolver a polícia", "Recorreu a terceiros",
+                                       "Resolveu sozinho", "Outro",
+                                       "Não se aplica", "Não respondeu"))
+
+barrasPerguntas("B.6.2",titulo =  "Caso não tenha feito o registro do último crime sofrido, qual o principal motivo pelo qual não procurou a polícia no último crime que foi vítima?")
+```
+
+
+Row
+-------------------------------------
+
+
+### Pessoas que conhecem residências invadidas
+
+```{r}
+va = Respostas$B.1_Complemento %>% na.omit() %>% length()
+valueBox(va, icon = "fa-home")
+```
+
+### Pessoas que conhecem vítimas de roubo/assalto
+
+```{r}
+va = Respostas$B.2_Complemento %>% na.omit() %>% length()
+valueBox(va, icon = "fa-frown")
+```
+
+### Pessoas que conhecem vítimas de roubo/arrombamento de veículos 
+
+```{r}
+va = Respostas$B.3_Complemento %>% na.omit() %>% length()
+valueBox(va, icon = "fa-car")
+```
+
+### Pessoas que conhecem comércios que foram roubados/assaltados
+
+```{r}
+va = Respostas$B.4_Complemento %>% na.omit() %>% length()
+valueBox(va, icon = "fa-store")
+```
+
+Row
+-------------------------------------
+
+### Quantidade de residências invadidas relatadas
+```{r}
+CompB1 = Respostas$B.1_Complemento %>% 
+  table() %>% as.data.frame() 
+names(CompB1)[1] = "Quant"
+CompB1 %<>% arrange(Freq) %>% mutate(cores = rev(viridis(nrow(CompB1))))
+
+CompB1%>% 
+  plot_ly(labels = ~Quant, values = ~Freq,
+          textposition = 'inside',
+          marker = list(colors = ~cores)) %>% 
+  add_pie(hole = 0.6) %>% 
+    layout( 
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+```
+
+### Quantidade de pessoas roubadas/assaltadas relatadas
+```{r}
+CompB2 = Respostas$B.2_Complemento %>% 
+  table() %>% as.data.frame() 
+names(CompB2)[1] = "Quant"
+CompB2 %<>% arrange(Freq) %>% mutate(cores = rev(viridis(nrow(CompB1))))
+
+CompB2%>% 
+  plot_ly(labels = ~Quant, values = ~Freq,
+          textposition = 'inside',
+          marker = list(colors = ~cores)) %>% 
+  add_pie(hole = 0.6) %>% 
+    layout( 
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+```
+
+### Quantidade de veículos roubados/arrombados relatados
+```{r}
+CompB3 = Respostas$B.3_Complemento %>% 
+  table() %>% as.data.frame() 
+names(CompB3)[1] = "Quant"
+CompB3 %<>% arrange(Freq) %>% mutate(cores = rev(viridis(nrow(CompB1))))
+
+CompB3%>% 
+  plot_ly(labels = ~Quant, values = ~Freq,
+          textposition = 'inside',
+          marker = list(colors = ~cores)) %>% 
+  add_pie(hole = 0.6) %>% 
+    layout( 
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+```
+
+### Quantidade de comércios roubados/assaltados relatadas
+```{r}
+CompB4 = Respostas$B.2_Complemento %>% 
+  table() %>% as.data.frame() 
+names(CompB4)[1] = "Quant"
+CompB4 %<>% arrange(Freq) %>% mutate(cores = rev(viridis(nrow(CompB1))))
+
+CompB4%>% 
+  plot_ly(labels = ~Quant, values = ~Freq,
+          textposition = 'inside',
+          marker = list(colors = ~cores)) %>% 
+  add_pie(hole = 0.6) %>% 
+    layout( 
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+```
+
+Percepção de Segurança {data-navmenu="Perguntas"} 
+=====================================  
+
+Row
+------------------------------
+### C.1
+
+```{r}
+Respostas$C.1 %<>% factor(labels = c("Muito Seguro(a)", "Seguro(a)",  "Pouco Seguro(a)", "Inseguro(a)", "Não Respondeu"))
+barrasPerguntas("C.1", "Ao caminhar sozinho durante o Dia na sua vizinhança, como você se sente?")
+```
+
+### C.2
+
+```{r}
+Respostas$C.2 %<>% factor(labels = c("Muito Seguro(a)", "Seguro(a)",  "Pouco Seguro(a)", "Inseguro(a)", "Não Sabe", "Não Respondeu"))
+barrasPerguntas("C.2", "Ao caminhar sozinho durante a Noite na sua vizinhança, como você se sente?")
+```
+
+Row
+-----------------------------------
+
+###
+
+```{r}
+
+  vtQmultiplas = apply(Respostas[,28:36],2, table)
+  propmul = apply(Respostas[,28:36],2, function(a){a %>% table %>% prop.table()}) %>% melt()
+  dC3 = data.frame(melt(vtQmultiplas), propmul$value)
+    dC3 %<>%  mutate(cores = factor(X1, labels = rev(viridis(5))),
+                     Medo = factor(X2, labels = c("Residência invadida/arrombada",
+                                                  "Ter objetos pessoais de valor tomados<br> a força por outras pessoas",
+                                                  "Ter seu carro/moto tomados em assalto/furto",
+                                                  "Se envolver em brigas/agressões físicas <br>com outras pessoas",
+                                                  "Morrer assassinado",
+                                                  "Sequestro e Sequestro Relâmpago",
+                                                  "Sofrer uma agressão sexual (estupro)",
+                                                  "Ser vítima de uma fraude e perder<br> quantia significativa de dinheiro",
+                                                  "Receber uma ligação de bandidos exigindo dinheiro")))
+
+
+
+  dC3 %>% plot_ly( x = ~value, y = ~X2, type = "bar", 
+          orientation = "h",  
+          text = paste0(round(dC3$propmul.value*100,2), "%<br>", "Resp:", dC3$X1, "<br>",
+                        dC3$Medo),
+          marker = list(color = ~cores, opacity = 0.8,
+                        line = list(color = 'rgb(248, 248, 249)', width = 1))) %>% 
+    layout(title = "Você tem medo de...",
+           xaxis = list(title = "",
+                        showgrid = FALSE,
+                        showline = FALSE,
+                        zeroline = FALSE),
+           yaxis = list(title = "",
+                        showgrid = FALSE,
+                        showline = FALSE,
+                        zeroline = FALSE),
+           barmode = 'stack') %>% 
+   add_annotations(xref = 'paper', yref = 'paper',
+                  x = 0, y = -0.09,
+                  text = paste('Sendo 1 nenhum medo e 5 muito medo'),
+                  font = list(family = 'Arial', size = 10, color = 'rgb(150,150,150)'),
+                  showarrow = FALSE)
+    
+```
+
+Percepção da Atuação Policial {data-navmenu="Perguntas"} 
+=====================================  
+
+Row
+------------------------------
+
+### D.1)
+
+```{r}
+d1  = Questoesmultiplas(dado = Respostas[,37:45], lab = c("Solicitou Informações a um policial",
+                                                               "Foi revistado", 
+                                                               "Procurou a polícia por ter sido <br>vítima de um crime", 
+                                                           "Resolver algum conflito entre vizinhos ou amigos",
+                                                           "Foi denunciar um crime à polícia sem<br> que você fosse a vítima",
+                                                           "Procurou a polícia para ajudar <br>alguma vítima de crime",
+                                                           "Procurou a polícia para avisar <br>sobre um acidente de trânsito",
+                                                           "Foi abordado por policiais que <br>estavam investigando um crime",
+                                                           "Foi parado numa blitz policial"))
+plotQuestoesmultiplas(d1,"No último ano (2018), você teve contato com a polícia <br>no Itatiaia em alguma das seguintes situações?")
+```
+
+
+### D.2
+
+```{r}
+Respostas$D.2 %<>% factor(labels = c("Confia muito", "Confia razoavelmente", "Confia pouco", "Não confia", "Não Sabe"))
+
+barrasPerguntas("D.2", "Pensando na atuação das polícias no Itatiaia, você...")
+```
+
