@@ -15,3 +15,7 @@ The project involved around 20 students. The project steps were the following:
 - Dashboard.
 
 This project allowed us to understand the research steps e theirs complexity. In addition we learned the best types of sampling for various situations.
+
+![Dash1](dashIta.PNG)  
+![Dash2](dashIta2.PNG)  
+![Dash3](dashIta3.PNG)  
